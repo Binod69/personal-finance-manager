@@ -4,20 +4,23 @@ import { api } from "../../convex/_generated/api";
 import { toast } from "sonner";
 
 export function WorkTracker() {
-  const [activeTab, setActiveTab] = useState<"add" | "history" | "stats">(
-    "add"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "add" | "history" | "stats" | "monthly"
+  >("add");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [startTime, setStartTime] = useState("09:00");
+  const [startTime, setStartTime] = useState("06:45");
   const [endTime, setEndTime] = useState("17:00");
   const [breakMinutes, setBreakMinutes] = useState(60);
-  const [hourlyRate, setHourlyRate] = useState(25);
+  const [hourlyRate, setHourlyRate] = useState(1050);
   const [description, setDescription] = useState("");
   const [isHoliday, setIsHoliday] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   const addWorkSession = useMutation(api.workSessions.add);
   const removeWorkSession = useMutation(api.workSessions.remove);
-  const workSessions = useQuery(api.workSessions.list, { limit: 20 });
+  const workSessions = useQuery(api.workSessions.list, { limit: 100 }); // Get more items for pagination
 
   // Check if selected date is a holiday
   const selectedDateHoliday = useQuery(api.holidays.isHoliday, {
@@ -38,6 +41,11 @@ export function WorkTracker() {
   const monthlyStats = useQuery(api.workSessions.getMonthlyStats, {
     year: today.getFullYear(),
     month: today.getMonth(),
+  });
+
+  // Get yearly data for monthly view
+  const yearlyData = useQuery(api.workSessions.getYearlyData, {
+    year: selectedYear,
   });
 
   const formatCurrency = (amount: number) => {
@@ -125,7 +133,6 @@ export function WorkTracker() {
       setIsHoliday(false);
     } catch (error) {
       toast.error("Failed to add work session");
-      console.log(error);
     }
   };
 
@@ -136,12 +143,26 @@ export function WorkTracker() {
         toast.success("Work session deleted successfully");
       } catch (error) {
         toast.error("Failed to delete work session");
-        console.log(error);
       }
     }
   };
 
   const preview = calculatePreview();
+
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -168,7 +189,10 @@ export function WorkTracker() {
           Add Session
         </button>
         <button
-          onClick={() => setActiveTab("history")}
+          onClick={() => {
+            setActiveTab("history");
+            setCurrentPage(1);
+          }}
           className={`px-3 sm:px-4 py-2 rounded-md font-medium transition-colors whitespace-nowrap ${
             activeTab === "history"
               ? "bg-white text-blue-600 shadow-sm"
@@ -186,6 +210,16 @@ export function WorkTracker() {
           }`}
         >
           Statistics
+        </button>
+        <button
+          onClick={() => setActiveTab("monthly")}
+          className={`px-3 sm:px-4 py-2 rounded-md font-medium transition-colors whitespace-nowrap ${
+            activeTab === "monthly"
+              ? "bg-white text-blue-600 shadow-sm"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          Monthly Data
         </button>
       </div>
 
@@ -425,12 +459,27 @@ export function WorkTracker() {
       {activeTab === "history" && (
         <div className="bg-white rounded-lg shadow-sm border">
           <div className="p-4 sm:p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">
-              Work History
-            </h2>
-            <p className="text-gray-600 mt-1">
-              Your recent work sessions with overtime calculations
-            </p>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Work History
+                </h2>
+                <p className="text-gray-600 mt-1">
+                  Your work sessions with overtime calculations
+                </p>
+              </div>
+              {workSessions && workSessions.length > 0 && (
+                <div className="text-sm text-gray-500">
+                  Showing{" "}
+                  {Math.min(
+                    (currentPage - 1) * itemsPerPage + 1,
+                    workSessions.length
+                  )}{" "}
+                  - {Math.min(currentPage * itemsPerPage, workSessions.length)}{" "}
+                  of {workSessions.length} sessions
+                </div>
+              )}
+            </div>
           </div>
 
           {workSessions === undefined ? (
@@ -444,121 +493,178 @@ export function WorkTracker() {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
-              {workSessions.map((session) => (
-                <div
-                  key={session._id}
-                  className="p-4 sm:p-6 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                        <div
-                          className={`w-3 h-3 rounded-full ${session.isHoliday ? "bg-orange-500" : "bg-blue-500"}`}
-                        ></div>
+            <>
+              <div className="divide-y divide-gray-200">
+                {workSessions
+                  .slice(
+                    (currentPage - 1) * itemsPerPage,
+                    currentPage * itemsPerPage
+                  )
+                  .map((session) => (
+                    <div
+                      key={session._id}
+                      className="p-4 sm:p-6 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="flex-1">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4">
-                            <h3 className="text-lg font-medium text-gray-900">
-                              {new Date(session.date).toLocaleDateString(
-                                "en-US",
-                                {
-                                  weekday: "short",
-                                  year: "numeric",
-                                  month: "short",
-                                  day: "numeric",
-                                }
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                            <div
+                              className={`w-3 h-3 rounded-full ${session.isHoliday ? "bg-orange-500" : "bg-blue-500"}`}
+                            ></div>
+                            <div className="flex-1">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4">
+                                <h3 className="text-lg font-medium text-gray-900">
+                                  {new Date(session.date).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      weekday: "short",
+                                      year: "numeric",
+                                      month: "short",
+                                      day: "numeric",
+                                    }
+                                  )}
+                                </h3>
+                                <p className="text-sm text-gray-500">
+                                  {session.startTime} - {session.endTime}
+                                </p>
+                              </div>
+                              {session.description && (
+                                <p className="text-sm text-gray-600 mt-1">
+                                  {session.description}
+                                </p>
                               )}
-                            </h3>
-                            <p className="text-sm text-gray-500">
-                              {session.startTime} - {session.endTime}
-                            </p>
-                          </div>
-                          {session.description && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              {session.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
-                            <span>
-                              Total: {formatHours(session.hoursWorked)}
-                            </span>
-                            {session.regularHours &&
-                              session.regularHours > 0 && (
+                              <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
                                 <span>
-                                  Regular: {formatHours(session.regularHours)}
+                                  Total: {formatHours(session.hoursWorked)}
                                 </span>
-                              )}
-                            {session.overtimeHours &&
-                              session.overtimeHours > 0 && (
-                                <span className="text-orange-600">
-                                  Overtime: {formatHours(session.overtimeHours)}
+                                {session.regularHours &&
+                                  session.regularHours > 0 && (
+                                    <span>
+                                      Regular:{" "}
+                                      {formatHours(session.regularHours)}
+                                    </span>
+                                  )}
+                                {session.overtimeHours &&
+                                  session.overtimeHours > 0 && (
+                                    <span className="text-orange-600">
+                                      Overtime:{" "}
+                                      {formatHours(session.overtimeHours)}
+                                    </span>
+                                  )}
+                                <span>
+                                  Rate: {formatCurrency(session.hourlyRate)}/hr
                                 </span>
+                                {session.breakMinutes > 0 && (
+                                  <span>Break: {session.breakMinutes}m</span>
+                                )}
+                                {session.isHoliday && (
+                                  <span className="text-orange-600">
+                                    Holiday (1.5x)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-4">
+                          <div className="text-right">
+                            <p className="text-lg font-semibold text-green-600">
+                              {formatCurrency(session.totalEarnings)}
+                            </p>
+                            {session.regularEarnings &&
+                              session.overtimeEarnings && (
+                                <div className="text-xs text-gray-500">
+                                  <div>
+                                    Regular:{" "}
+                                    {formatCurrency(session.regularEarnings)}
+                                  </div>
+                                  <div>
+                                    Overtime:{" "}
+                                    {formatCurrency(session.overtimeEarnings)}
+                                  </div>
+                                </div>
                               )}
-                            <span>
-                              Rate: {formatCurrency(session.hourlyRate)}/hr
-                            </span>
-                            {session.breakMinutes > 0 && (
-                              <span>Break: {session.breakMinutes}m</span>
-                            )}
-                            {session.isHoliday && (
-                              <span className="text-orange-600">
-                                Holiday (1.5x)
-                              </span>
+                            {session.holidayEarnings && (
+                              <div className="text-xs text-orange-600">
+                                Holiday:{" "}
+                                {formatCurrency(session.holidayEarnings)}
+                              </div>
                             )}
                           </div>
+
+                          <button
+                            onClick={() => handleDelete(session._id)}
+                            className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-50 transition-colors"
+                            title="Delete session"
+                          >
+                            <svg
+                              className="w-5 h-5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </div>
+                  ))}
+              </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <div className="text-right">
-                        <p className="text-lg font-semibold text-green-600">
-                          {formatCurrency(session.totalEarnings)}
-                        </p>
-                        {session.regularEarnings &&
-                          session.overtimeEarnings && (
-                            <div className="text-xs text-gray-500">
-                              <div>
-                                Regular:{" "}
-                                {formatCurrency(session.regularEarnings)}
-                              </div>
-                              <div>
-                                Overtime:{" "}
-                                {formatCurrency(session.overtimeEarnings)}
-                              </div>
-                            </div>
-                          )}
-                        {session.holidayEarnings && (
-                          <div className="text-xs text-orange-600">
-                            Holiday: {formatCurrency(session.holidayEarnings)}
-                          </div>
-                        )}
-                      </div>
+              {/* Pagination */}
+              {workSessions.length > itemsPerPage && (
+                <div className="p-4 border-t border-gray-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="text-sm text-gray-700">
+                      Page {currentPage} of{" "}
+                      {Math.ceil(workSessions.length / itemsPerPage)}
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() =>
+                          setCurrentPage(Math.max(1, currentPage - 1))
+                        }
+                        disabled={currentPage === 1}
+                        className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+
+                      <span className="px-3 py-2 text-sm text-gray-700">
+                        {currentPage} /{" "}
+                        {Math.ceil(workSessions.length / itemsPerPage)}
+                      </span>
 
                       <button
-                        onClick={() => handleDelete(session._id)}
-                        className="text-red-600 hover:text-red-800 p-2 rounded-md hover:bg-red-50 transition-colors"
-                        title="Delete session"
+                        onClick={() =>
+                          setCurrentPage(
+                            Math.min(
+                              Math.ceil(workSessions.length / itemsPerPage),
+                              currentPage + 1
+                            )
+                          )
+                        }
+                        disabled={
+                          currentPage ===
+                          Math.ceil(workSessions.length / itemsPerPage)
+                        }
+                        className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
+                        Next
                       </button>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -778,6 +884,216 @@ export function WorkTracker() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Monthly Data Tab */}
+      {activeTab === "monthly" && (
+        <div className="space-y-6">
+          {/* Year Selector */}
+          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <h2 className="text-xl font-semibold text-gray-900">
+                Monthly Work Data
+              </h2>
+              <div className="flex items-center space-x-2">
+                <label
+                  htmlFor="year"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Year:
+                </label>
+                <select
+                  id="year"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                  className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const year = new Date().getFullYear() - 2 + i;
+                    return (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Monthly Breakdown */}
+          {yearlyData === undefined ? (
+            <div className="flex justify-center items-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {yearlyData.monthlyData.map((monthData, index) => (
+                <div
+                  key={index}
+                  className="bg-white p-6 rounded-lg shadow-sm border"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {monthNames[index]}
+                    </h3>
+                    {monthData.workDays > 0 && (
+                      <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        {monthData.workDays} days
+                      </span>
+                    )}
+                  </div>
+
+                  {monthData.workDays === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400">No work sessions</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">
+                          Total Hours:
+                        </span>
+                        <span className="font-semibold text-blue-600">
+                          {formatHours(monthData.totalHours)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Regular:</span>
+                        <span className="font-semibold text-green-600">
+                          {formatHours(monthData.regularHours || 0)}
+                        </span>
+                      </div>
+
+                      {(monthData.overtimeHours || 0) > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">
+                            Overtime:
+                          </span>
+                          <span className="font-semibold text-orange-600">
+                            {formatHours(monthData.overtimeHours || 0)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                        <span className="text-sm font-medium text-gray-700">
+                          Total Earnings:
+                        </span>
+                        <span className="font-bold text-green-600">
+                          {formatCurrency(monthData.totalEarnings)}
+                        </span>
+                      </div>
+
+                      {(monthData.holidayDays || 0) > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">
+                            Holiday Days:
+                          </span>
+                          <span className="font-semibold text-orange-600">
+                            {monthData.holidayDays}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">
+                          Avg Hours/Day:
+                        </span>
+                        <span className="font-semibold text-gray-700">
+                          {formatHours(monthData.averageHoursPerDay || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Yearly Summary */}
+          {yearlyData && (
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">
+                {selectedYear} Summary
+              </h3>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {formatHours(yearlyData.totalHours)}
+                  </p>
+                  <p className="text-sm text-gray-600">Total Hours</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatHours(yearlyData.totalRegularHours)}
+                  </p>
+                  <p className="text-sm text-gray-600">Regular Hours</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-orange-600">
+                    {formatHours(yearlyData.totalOvertimeHours)}
+                  </p>
+                  <p className="text-sm text-gray-600">Overtime Hours</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-600">
+                    {formatCurrency(yearlyData.totalEarnings)}
+                  </p>
+                  <p className="text-sm text-gray-600">Total Earnings</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-purple-600">
+                    {yearlyData.totalWorkDays}
+                  </p>
+                  <p className="text-sm text-gray-600">Work Days</p>
+                </div>
+
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-orange-600">
+                    {yearlyData.totalHolidayDays}
+                  </p>
+                  <p className="text-sm text-gray-600">Holiday Days</p>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-lg font-semibold text-gray-700">
+                      {formatHours(yearlyData.averageHoursPerWorkDay)}
+                    </p>
+                    <p className="text-sm text-gray-600">Avg Hours/Work Day</p>
+                  </div>
+
+                  <div>
+                    <p className="text-lg font-semibold text-gray-700">
+                      {formatCurrency(yearlyData.averageEarningsPerWorkDay)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Avg Earnings/Work Day
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-lg font-semibold text-gray-700">
+                      {formatCurrency(yearlyData.averageMonthlyEarnings)}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Avg Monthly Earnings
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

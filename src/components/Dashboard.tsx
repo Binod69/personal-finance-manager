@@ -11,11 +11,17 @@ export function Dashboard() {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
+  // Pagination states
+  const [categoryPage, setCategoryPage] = useState(1);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const categoriesPerPage = 5;
+  const transactionsPerPage = 5;
+
   const balance = useQuery(api.transactions.getBalance);
   const categorySpending = useQuery(api.transactions.getCategorySpending, {
     days: 30,
   });
-  const recentTransactions = useQuery(api.transactions.list, { limit: 5 });
+  const recentTransactions = useQuery(api.transactions.list, { limit: 50 }); // Get more for pagination
   const addTransaction = useMutation(api.transactions.add);
   const categories = useQuery(api.categories.list, { type });
 
@@ -41,6 +47,24 @@ export function Dashboard() {
   const totalSpending = categorySpending.reduce(
     (sum, cat) => sum + cat.amount,
     0
+  );
+
+  // Pagination calculations
+  const sortedCategories = categorySpending.sort((a, b) => b.amount - a.amount);
+  const totalCategoryPages = Math.ceil(
+    sortedCategories.length / categoriesPerPage
+  );
+  const paginatedCategories = sortedCategories.slice(
+    (categoryPage - 1) * categoriesPerPage,
+    categoryPage * categoriesPerPage
+  );
+
+  const totalTransactionPages = Math.ceil(
+    recentTransactions.length / transactionsPerPage
+  );
+  const paginatedTransactions = recentTransactions.slice(
+    (transactionPage - 1) * transactionsPerPage,
+    transactionPage * transactionsPerPage
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -146,18 +170,34 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Category Spending */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Spending by Category (Last 30 Days)
-          </h3>
-          {categorySpending.length === 0 ? (
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Spending by Category (Last 30 Days)
+            </h3>
+            {sortedCategories.length > categoriesPerPage && (
+              <div className="text-sm text-gray-500">
+                {Math.min(
+                  (categoryPage - 1) * categoriesPerPage + 1,
+                  sortedCategories.length
+                )}{" "}
+                -{" "}
+                {Math.min(
+                  categoryPage * categoriesPerPage,
+                  sortedCategories.length
+                )}{" "}
+                of {sortedCategories.length}
+              </div>
+            )}
+          </div>
+
+          {sortedCategories.length === 0 ? (
             <p className="text-gray-500 text-center py-8">
               No expenses recorded yet
             </p>
           ) : (
-            <div className="space-y-3">
-              {categorySpending
-                .sort((a, b) => b.amount - a.amount)
-                .map((category) => {
+            <>
+              <div className="space-y-3 mb-4">
+                {paginatedCategories.map((category) => {
                   const percentage =
                     totalSpending > 0
                       ? (category.amount / totalSpending) * 100
@@ -186,48 +226,136 @@ export function Dashboard() {
                     </div>
                   );
                 })}
-            </div>
+              </div>
+
+              {/* Category Pagination */}
+              {totalCategoryPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-700">
+                    Page {categoryPage} of {totalCategoryPages}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() =>
+                        setCategoryPage(Math.max(1, categoryPage - 1))
+                      }
+                      disabled={categoryPage === 1}
+                      className="px-3 py-1 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-1 text-sm text-gray-700">
+                      {categoryPage} / {totalCategoryPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setCategoryPage(
+                          Math.min(totalCategoryPages, categoryPage + 1)
+                        )
+                      }
+                      disabled={categoryPage === totalCategoryPages}
+                      className="px-3 py-1 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Recent Transactions */}
         <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Recent Transactions
-          </h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Recent Transactions
+            </h3>
+            {recentTransactions.length > transactionsPerPage && (
+              <div className="text-sm text-gray-500">
+                {Math.min(
+                  (transactionPage - 1) * transactionsPerPage + 1,
+                  recentTransactions.length
+                )}{" "}
+                -{" "}
+                {Math.min(
+                  transactionPage * transactionsPerPage,
+                  recentTransactions.length
+                )}{" "}
+                of {recentTransactions.length}
+              </div>
+            )}
+          </div>
+
           {recentTransactions.length === 0 ? (
             <p className="text-gray-500 text-center py-8">
               No transactions yet
             </p>
           ) : (
-            <div className="space-y-3">
-              {recentTransactions.map((transaction) => (
-                <div
-                  key={transaction._id}
-                  className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">
-                      {transaction.description}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {transaction.category}
-                    </p>
+            <>
+              <div className="space-y-3 mb-4">
+                {paginatedTransactions.map((transaction) => (
+                  <div
+                    key={transaction._id}
+                    className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">
+                        {transaction.description}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {transaction.category}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p
+                        className={`font-semibold ${transaction.type === "income" ? "text-green-600" : "text-red-600"}`}
+                      >
+                        {transaction.type === "income" ? "+" : "-"}
+                        {formatCurrency(transaction.amount)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(transaction.date).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p
-                      className={`font-semibold ${transaction.type === "income" ? "text-green-600" : "text-red-600"}`}
+                ))}
+              </div>
+
+              {/* Transaction Pagination */}
+              {totalTransactionPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-700">
+                    Page {transactionPage} of {totalTransactionPages}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() =>
+                        setTransactionPage(Math.max(1, transactionPage - 1))
+                      }
+                      disabled={transactionPage === 1}
+                      className="px-3 py-1 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {transaction.type === "income" ? "+" : "-"}
-                      {formatCurrency(transaction.amount)}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(transaction.date).toLocaleDateString()}
-                    </p>
+                      Previous
+                    </button>
+                    <span className="px-3 py-1 text-sm text-gray-700">
+                      {transactionPage} / {totalTransactionPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setTransactionPage(
+                          Math.min(totalTransactionPages, transactionPage + 1)
+                        )
+                      }
+                      disabled={transactionPage === totalTransactionPages}
+                      className="px-3 py-1 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -331,7 +459,7 @@ export function Dashboard() {
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-gray-500 text-lg">$</span>
+                    <span className="text-gray-500 text-lg">¥</span>
                   </div>
                   <input
                     type="number"
