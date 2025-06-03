@@ -13,7 +13,7 @@ export function TransactionList() {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "YEN",
+      currency: "JPY",
     }).format(amount);
   };
 
